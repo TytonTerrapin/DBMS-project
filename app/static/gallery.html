@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CampusLens - Gallery</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+        }
+        .controls {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        .gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 1rem;
+        }
+        .photo-card {
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .photo-card img {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+        }
+        .photo-info {
+            padding: 1rem;
+        }
+        .tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+        .tag {
+            background: #e0e0e0;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+        }
+        .upload-area {
+            border: 2px dashed #ccc;
+            padding: 2rem;
+            text-align: center;
+            border-radius: 8px;
+            margin-bottom: 2rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>CampusLens Gallery</h1>
+        <button onclick="logout()">Logout</button>
+    </div>
+
+    <div class="upload-area" id="uploadArea">
+        <input type="file" id="fileInput" style="display: none" accept="image/*">
+        <button onclick="document.getElementById('fileInput').click()">Upload Photo</button>
+    </div>
+
+    <div class="controls">
+        <input type="text" id="searchInput" placeholder="Search by tag...">
+        <select id="sortSelect">
+            <option value="newest">Newest First</option>
+            <option value="tag_count">Most Tags</option>
+            <option value="confidence">Highest Confidence</option>
+        </select>
+    </div>
+
+    <div class="gallery" id="photoGallery">
+        <!-- Photos will be loaded here -->
+    </div>
+
+    <script>
+        // Load photos
+        async function loadPhotos() {
+            try {
+                const response = await fetch('/api/photos', {
+                    credentials: 'include'  // Important for cookie handling
+                });
+                
+                if (response.status === 401) {
+                    // Unauthorized - redirect to login
+                    window.location.href = '/index.html';
+                    return;
+                }
+                
+                const photos = await response.json();
+                displayPhotos(photos);
+            } catch (error) {
+                console.error('Error loading photos:', error);
+                if (error.status === 401) {
+                    window.location.href = '/index.html';
+                }
+            }
+        }
+
+        // Display photos with delete controls
+        function displayPhotos(photos) {
+            const gallery = document.getElementById('photoGallery');
+            gallery.innerHTML = photos.map(photo => `
+                <div class="photo-card" data-id="${photo.id}">
+                    <img src="${photo.file_url}" alt="${photo.title}">
+                    <div class="photo-info">
+                        <h3>${photo.title}</h3>
+                        <div class="tags">
+                            ${ photo.tags_generated ? (photo.tags || []).map(tag => `<span class="tag">${tag.name || tag}</span>`).join('') : `<em>Processing tags...</em>` }
+                        </div>
+                        <div style="margin-top:0.5rem; display:flex; gap:0.5rem;">
+                            <button onclick="openPhoto(${photo.id})">View</button>
+                            <button onclick="confirmDelete(${photo.id})" style="background:#d9534f;color:white;border:none;padding:6px 10px;border-radius:4px;">Delete</button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function openPhoto(photoId) {
+            // Simple behavior: open the photo in a new tab to the raw URL
+            const card = document.querySelector(`.photo-card[data-id="${photoId}"]`);
+            if (!card) return;
+            const img = card.querySelector('img');
+            if (img && img.src) window.open(img.src, '_blank');
+        }
+
+        function confirmDelete(photoId) {
+            if (!confirm('Delete this photo? This action cannot be undone.')) return;
+            deletePhoto(photoId);
+        }
+
+        async function deletePhoto(photoId) {
+            try {
+                const resp = await fetch(`/api/photos/${photoId}`, {
+                    method: 'DELETE',
+                    credentials: 'include'
+                });
+                if (resp.ok) {
+                    // Remove card from DOM
+                    const card = document.querySelector(`.photo-card[data-id="${photoId}"]`);
+                    if (card) card.remove();
+                } else {
+                    const err = await resp.json().catch(() => ({}));
+                    alert(err.detail || 'Delete failed');
+                }
+            } catch (err) {
+                console.error('Delete error:', err);
+                alert('Failed to delete photo');
+            }
+        }
+
+        // Handle file upload
+        document.getElementById('fileInput').addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('title', file.name);
+
+            try {
+                const response = await fetch('/api/photos/upload', {
+                    method: 'POST',
+                    body: formData,
+                    credentials: 'include'
+                });
+
+                if (response.ok) {
+                    loadPhotos(); // Reload the gallery
+                } else {
+                    alert('Upload failed');
+                }
+            } catch (error) {
+                console.error('Upload error:', error);
+                alert('Upload failed');
+            }
+        });
+
+        // Handle logout
+        async function logout() {
+            try {
+                await fetch('/api/logout', {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                window.location.href = '/index.html';
+            } catch (error) {
+                console.error('Logout error:', error);
+                // Redirect anyway
+                window.location.href = '/index.html';
+            }
+        }
+
+        // Initial load
+        loadPhotos();
+    </script>
+</body>
+</html>
