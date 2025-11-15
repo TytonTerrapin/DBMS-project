@@ -1,0 +1,277 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* THEME TOKENS: Clean Editorial */
+.theme-editorial {
+  --bg-start: #ffffff;
+  --bg-end: #f8fafc;
+  --text: #0f1724;          /* slate-950ish */
+  --muted: #475569;         /* slate-600 */
+  --accent: #2563eb;        /* blue-600 */
+  --highlight: #d4af37;     /* gold */
+  --border: #e5e7eb;        /* gray-200 */
+  --card: #ffffff;
+  --radius: 12px;
+  --shadow: 0 1px 2px rgba(15, 23, 36, 0.06);
+}
+
+/* Muted Teal Palette - applied to most pages */
+.theme-muted-teal {
+  /* Muted Teal (calm, modern, slightly playful) */
+  --accent: #0EA5A4;
+  --accent-600: #0B948E; /* hover */
+  --teal-soft: #67E8F9;
+  --bg-start: #071124;
+  --bg-end: #071A1A;
+  --card: rgba(255,255,255,0.03);
+  --text: #EAF8F7;
+  --muted: #9FB7B5;
+  --success: #34D399;
+  --danger: #F97316;
+  --radius: 12px;
+  --shadow: 0 1px 2px rgba(10, 30, 30, 0.06);
+  /* Derived/border token kept for components that expect --border */
+  --border: rgba(234,248,247,0.06);
+}
+
+@layer base {
+  html, body, #root {
+    min-height: 100%;
+    background: linear-gradient(180deg, var(--bg-start), var(--bg-end));
+    /* prevent accidental horizontal scroll on small screens from decorative elements */
+    overflow-x: hidden;
+  }
+  body {
+    @apply antialiased;
+    color: var(--text);
+  }
+  h1, h2, h3, h4 {
+    letter-spacing: -0.01em;
+  }
+  a {
+    color: var(--accent);
+  }
+  a:hover {
+    text-decoration: underline;
+  }
+}
+
+/* COMPONENT PRESETS aligned to editorial theme */
+@layer components {
+  .btn-primary {
+    /* replaces primary-600 look with editorial accent */
+    @apply font-semibold py-2 px-4 rounded-lg transition-colors duration-200;
+    background: var(--accent);
+    color: white;
+  }
+  .btn-primary:hover { filter: brightness(0.95); }
+
+  .btn-secondary {
+    @apply font-semibold py-2 px-4 rounded-lg transition-colors duration-200;
+    background: var(--card);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .btn-secondary:hover { background: #f1f5f9; }
+
+  .btn-danger {
+    @apply font-semibold py-2 px-4 rounded-lg transition-colors duration-200 text-white;
+    background: #dc2626; /* red-600 */
+  }
+  .btn-danger:hover { background: #b91c1c; }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    @apply p-6;
+  }
+
+  .input-field {
+    @apply w-full px-4 py-2 rounded-lg outline-none transition-all;
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--text);
+  }
+  .input-field:focus {
+    box-shadow: 0 0 0 2px color-mix(in oklab, var(--accent) 25%, transparent);
+    border-color: color-mix(in oklab, var(--accent) 60%, var(--border));
+  }
+
+  /* Placeholder and input text visibility for themed backgrounds */
+  .input-field::placeholder {
+    color: var(--muted);
+    opacity: 1;
+  }
+
+  /* Utility variants for editorial look */
+  .bar-surface {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+  }
+  .chip {
+    border: 1px solid var(--border);
+    background: #fff;
+    color: var(--text);
+    border-radius: 9999px;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+  }
+  .chip--accent {
+    border-color: color-mix(in oklab, var(--accent) 35%, var(--border));
+    color: var(--accent);
+    background: #fff;
+  }
+
+  /* Photo modal tag pills */
+  .tag-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 9999px;
+    /* stronger contrast fallback: slightly lighter than card with subtle border */
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.06);
+    box-shadow: 0 1px 0 rgba(0,0,0,0.25);
+  }
+
+  /* Give the pill a more visible focus/hover state */
+  .tag-pill:hover, .tag-pill:focus {
+    background: rgba(255,255,255,0.06);
+    border-color: rgba(255,255,255,0.12);
+  }
+
+  /* Ensure the confidence tooltip is readable */
+  .tag-pill .group-hover\:opacity-100 {
+    opacity: 1 !important;
+  }
+
+  .tag-pill {
+    font-size: 0.875rem;
+    line-height: 1;
+    box-shadow: 0 1px 0 rgba(0,0,0,0.25) inset;
+  }
+
+  .tag-pill .h-2 { /* confidence dot */
+    width: 0.5rem; height: 0.5rem;
+    flex: none;
+    opacity: 0.95;
+  }
+
+  .tag-pill p {
+    margin: 0;
+    color: var(--text);
+  }
+
+  .tag-pill .group:hover .tag-tooltip,
+  .tag-pill:hover .tag-tooltip {
+    opacity: 1;
+  }
+
+  .tag-tooltip {
+    opacity: 0;
+    transition: opacity .15s ease-in-out;
+  }
+
+  /* Modal button helpers */
+  .modal-btn {
+    @apply flex items-center justify-center gap-2 font-semibold px-4;
+    height: 3rem;
+    border-radius: var(--radius);
+  }
+
+  .btn-ghost-danger {
+    background: transparent;
+    color: var(--danger, #ef4444);
+    border: 1px solid rgba(239,68,68,0.12);
+  }
+  .btn-ghost-danger:hover {
+    background: rgba(239,68,68,0.08);
+  }
+
+  /* Floating circular delete button used on photo cards / modals */
+  .btn-floating-danger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    padding: 0.5rem;
+    border-radius: 9999px;
+    background: var(--danger, #ef4444);
+    color: white;
+    box-shadow: 0 6px 18px rgba(15, 23, 36, 0.25);
+    transition: transform .12s ease, background .12s ease, opacity .12s ease;
+  }
+  .btn-floating-danger:hover {
+    transform: translateY(-2px);
+    background: color-mix(in oklab, var(--danger, #ef4444) 80%, black 20%);
+  }
+}
+
+/* Masonry Grid Styles (unchanged layout, editorial colors) */
+.masonry-grid { column-gap: 1.5rem; }
+.masonry-grid-item { break-inside: avoid; margin-bottom: 1.5rem; }
+@media (min-width: 640px) { .masonry-grid { columns: 2; } }
+@media (min-width: 1024px) { .masonry-grid { columns: 3; } }
+@media (min-width: 1280px) { .masonry-grid { columns: 4; } }
+
+/* Themed scrollbar styles (WebKit browsers) and Firefox fallbacks.
+   Uses the existing theme tokens so the scrollbar blends with the site.
+   Behavior: thin + subtle by default; thumb becomes more visible on hover.
+*/
+:root {
+  /* default scrollbar color tokens (themes may override --accent) */
+  --scrollbar-track: transparent;
+  --scrollbar-thumb: color-mix(in oklab, var(--accent) 44%, black 6%);
+  --scrollbar-thumb-hover: color-mix(in oklab, var(--accent) 66%, black 12%);
+  --scrollbar-width: 10px; /* desktop width */
+}
+
+/* WebKit (Chrome, Edge, Safari) */
+*::-webkit-scrollbar {
+  width: var(--scrollbar-width);
+  height: var(--scrollbar-width);
+}
+*::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 999px;
+  border: 2px solid transparent; /* space around thumb */
+  background-clip: padding-box;
+  transition: background .12s ease, opacity .12s ease;
+  opacity: 0.6; /* subtle by default */
+}
+/* Make scrollbar more visible when the user hovers the page */
+body:hover *::-webkit-scrollbar-thumb {
+  opacity: 1;
+  background: var(--scrollbar-thumb-hover);
+}
+
+/* Slightly darker thumb when active (dragging) */
+*::-webkit-scrollbar-thumb:active { background: color-mix(in oklab, var(--accent) 75%, black 18%); }
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+/* Small screens: use an even slimmer scrollbar to preserve space */
+@media (max-width: 640px) {
+  :root { --scrollbar-width: 8px; }
+}
+
+/* Optional: If you prefer *no* visible scrollbar but still scrollable,
+   uncomment the rules below. Keep commented by default for accessibility.
+   /*
+   *::-webkit-scrollbar { display: none; }
+   * { scrollbar-width: none; }
+   */

@@ -1,0 +1,38 @@
+﻿<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0b1220" />
+
+    <title>Campus Lens</title>
+    <meta name="description" content="AI-powered photo management for campus life with automatic tagging, smart search, and beautiful galleries." />
+
+    <meta property="og:title" content="Campus Lens — AI Photo Management" />
+    <meta property="og:description" content="Curate graduation moments, campus fests, canteen breaks, and library focus with intelligent tagging." />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="/" />
+
+  <!-- Favicon (replaces default/earth icon) -->
+  <link rel="icon" href="/favicon.svg" />
+
+    <link rel="preconnect" href="https://images.unsplash.com" crossorigin />
+    <link rel="dns-prefetch" href="https://images.unsplash.com" />
+
+    <link
+      rel="preload"
+      as="image"
+      href="https://images.unsplash.com/photo-1506157786151-b8491531f063?q=80&w=1200&auto=format&fit=crop"
+      imagesrcset="https://images.unsplash.com/photo-1506157786151-b8491531f063?q=80&w=800&auto=format&fit=crop 800w,
+                   https://images.unsplash.com/photo-1506157786151-b8491531f063?q=80&w=1200&auto=format&fit=crop 1200w"
+      imagesizes="(max-width: 768px) 800px, 1200px"
+    />
+  
+  </head>
+
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

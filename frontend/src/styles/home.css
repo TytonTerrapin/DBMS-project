@@ -1,0 +1,142 @@
+/* src/styles/home.css */
+* { box-sizing: border-box; }
+
+/* Responsive container inside editorial wrapper */
+.container {
+  position: relative;
+  margin-inline: auto;
+  width: 100%;
+  max-width: 960px;
+  height: 540px;
+  background: transparent;
+  border-radius: 20px;
+}
+
+/* Slide area */
+.container .slide { border-radius: 20px; position: relative; height: 100%; }
+
+/* Items positioning logic remains; shadow softened */
+.container .slide .item {
+  width: 200px;
+  height: 250px;
+  position: absolute;
+  top: 50%;
+  transform: translate(0, -50%);
+  border-radius: 20px;
+  /* softer, editorial shadow */
+  box-shadow: 0 1px 2px rgba(15, 23, 36, 0.06);
+  background-position: 50% 50%;
+  background-size: cover;
+  display: inline-block;
+  transition: all 0.5s;
+  border: 1px solid var(--border, #e5e7eb);
+}
+
+/* Only the active item fills the area */
+.slide .item:nth-child(1),
+.slide .item:nth-child(2) {
+  top: 0;
+  left: 0;
+  transform: translate(0, 0);
+  border-radius: 20px;
+  width: 100%;
+  height: 100%;
+  transition: all .5s;
+  /* subtle left-to-right scrim for text readability (lighter than dark theme) */
+  background-blend-mode: multiply;
+}
+
+/* Offscreen positions for next tiles (visuals hidden in single-hero mode) */
+.slide .item:nth-child(3) { left: 105%; }
+.slide .item:nth-child(4) { left: 135%; }
+.slide .item:nth-child(5) { left: 165%; }
+.slide .item:nth-child(n + 6) { left: 185%; opacity: 0; }
+
+/* Text content adjusted to editorial palette */
+.item .content {
+  position: absolute;
+  top: 50%;
+  left: 72px;
+  width: 420px;
+  text-align: left;
+  color: var(--text, #0f1724);
+  transform: translate(0, -50%);
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  display: none;
+}
+
+/* Show content on active hero (nth-child(2) due to DOM order trick) */
+.slide .item:nth-child(2) .content { display: block; }
+
+/* Title + description with lighter animation (no heavy blur) */
+.content .name {
+  font-size: 44px;
+  text-transform: none;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  opacity: 0;
+  animation: fadeRaise 300ms ease-out 1 forwards;
+}
+.content .des {
+  margin-top: 12px;
+  margin-bottom: 20px;
+  color: var(--muted, #475569);
+  opacity: 0;
+  animation: fadeRaise 300ms ease-out 120ms 1 forwards;
+}
+
+/* See more button -> editorial outline style */
+.content .seeMore button {
+  padding: 10px 20px;
+  border-radius: 10px;
+  border: 1px solid var(--border, #e5e7eb);
+  background-color: #ffffff;
+  color: var(--text, #0f1724);
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.1s ease, border-color 0.2s ease;
+  opacity: 0;
+  animation: fadeRaise 300ms ease-out 200ms 1 forwards;
+}
+.content .seeMore button:hover {
+  background-color: #f1f5f9;
+  border-color: #d1d5db;
+}
+.content .seeMore button:active { transform: translateY(1px); }
+
+@keyframes fadeRaise {
+  from { opacity: 0; transform: translate(0, 12px); }
+  to   { opacity: 1; transform: translate(0, 0); }
+}
+
+/* Controls: outlined chevrons, editorial borders */
+.button {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  position: absolute;
+  bottom: 16px;
+  left: 0;
+  pointer-events: none; /* container non-interactive */
+}
+
+.button button {
+  pointer-events: auto; /* buttons clickable */
+  width: 40px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid var(--border, #e5e7eb);
+  cursor: pointer;
+  background: #ffffff;
+  color: var(--text, #0f1724);
+  transition: 0.2s transform, 0.2s border-color, 0.2s background-color;
+}
+.button button:hover {
+  background: #f8fafc;
+  border-color: #d1d5db;
+  transform: translateY(-1px);
+}
+.button button:active { transform: translateY(0); }
+.next { padding-left: 3px; }
+.prev { padding-right: 3px; }
