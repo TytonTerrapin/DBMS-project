@@ -66,7 +66,7 @@ app/
 - SQLAlchemy for database ORM
 - BLIP and CLIP models for AI tagging
 
-## Todo
+## To-do
 
 - [ ] Implement proper authentication system
 - [ ] Add admin controls for tag management
