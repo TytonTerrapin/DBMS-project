@@ -10,7 +10,8 @@ A complete React + Vite + Clerk frontend with:
 - ✅ Dashboard with stats
 - ✅ Responsive design (Tailwind CSS)
 - ✅ Protected routes
-- ✅ API integration with JWT tokens
+- ✅ API integration with JWT token
+  
 
 ## 🔧 Setup Steps
 
