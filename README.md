@@ -127,6 +127,10 @@ All endpoints are prefixed with `/api`. Protected routes require a valid Clerk J
 - Protected routes require a valid Clerk JWT token.
 - See `frontend/IMPLEMENTATION_SUMMARY.md` for frontend architecture details.
 
+## Contributors
+- Arnav Bansal (TytonTerrapin)
+- Nakul Tanwar (Nakul-28)
+- Ayush (Ayush-CS-89112521)
 ## License
 
 MIT
