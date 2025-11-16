@@ -3,13 +3,12 @@ from fastapi import FastAPI, Depends, HTTPException, status, BackgroundTasks
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, Response, FileResponse
-# --- UPDATED IMPORTS ---
+# --- UPDATED IMPORTS for mysql.connector ---
 # We only need the 'photos' router
 from app.api import photos 
 # --- END UPDATE ---
 from app.ml.tagger import load_models
 from app.db.models import init_db
-from sqlalchemy import text
 
 app = FastAPI(title="CampusLens API")
 
@@ -102,6 +101,13 @@ async def health_check():
 @app.on_event("startup")
 async def startup_event():
     """Prepare uploads directory and optionally preload ML models on startup."""
+    # Initialize database and create tables
+    try:
+        init_db()
+        print("DEBUG: Database initialized successfully")
+    except Exception as e:
+        print(f"DEBUG: Database initialization error: {e}")
+
     # Ensure uploads directory exists and has permissive permissions for serving files
     uploads_dir = os.path.join(os.getcwd(), "uploads")
     try:
@@ -128,21 +134,6 @@ async def startup_event():
     load_models_flag = os.environ.get("LOAD_ML_MODELS", "true").lower() in ("1", "true", "yes")
     if load_models_flag:
         await load_models()
-
-    # Ensure `is_public` column exists in `photos` table. Many local setups may
-    # not have this column if the DB was created before the field was added.
-    # Attempt to ALTER the table; ignore errors if the column already exists.
-    try:
-        engine, _ = init_db()
-        with engine.begin() as conn:
-            try:
-                conn.execute(text("ALTER TABLE photos ADD COLUMN is_public TINYINT(1) NOT NULL DEFAULT 0"))
-                print("DEBUG: Added 'is_public' column to photos table")
-            except Exception as _:
-                # If column exists or ALTER not permitted, skip silently.
-                pass
-    except Exception as e:
-        print(f"DEBUG: Failed to ensure is_public column: {e}")
 
 if __name__ == "__main__":
     import uvicorn

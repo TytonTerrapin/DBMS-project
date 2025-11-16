@@ -1,7 +1,6 @@
 from fastapi import Depends, HTTPException, status
 from fastapi_clerk_auth import ClerkHTTPBearer
-from sqlalchemy.orm import Session
-from ..db.models import get_db, User
+from ..db.models import User
 import os
 from types import SimpleNamespace
 from dotenv import load_dotenv
@@ -85,8 +84,7 @@ clerk_auth_guard = ClerkHTTPBearer(clerk_config)
 
 
 def get_current_user(
-    credentials = Depends(clerk_auth_guard),
-    db: Session = Depends(get_db)
+    credentials = Depends(clerk_auth_guard)
 ) -> User:
     """
     Verifies the Clerk token, gets the user from the database,
@@ -99,32 +97,13 @@ def get_current_user(
         if not clerk_user_id:
             raise HTTPException(status_code=401, detail="Invalid authentication token")
         
-        # --- THIS IS THE "JUST-IN-TIME" LOGIC ---
-        
-        # 1. Try to find the user
-        user = db.query(User).filter(User.clerk_user_id == clerk_user_id).first()
-        
-        # 2. If they exist, return them
-        if user:
-            return user
-            
-        # 3. If they DON'T exist, create them in your database
-        print(f"Creating new user in database: {clerk_user_id}")
-        
+        # Try to get or create the user
         # We can try to get the email from the token payload
-        email = credentials.decoded.get("email") # This claim might not exist
+        email = credentials.decoded.get("email")  # This claim might not exist
         
-        new_user = User(
-            clerk_user_id=clerk_user_id,
-            email=email, # This will be NULL if not in token, which is fine
-            role='user'  # Default all new users to 'user'
-        )
-        db.add(new_user)
-        db.commit()
-        db.refresh(new_user)
+        user = User.get_or_create(clerk_user_id, email)
         
-        return new_user
-        # --- END OF NEW LOGIC ---
+        return user
         
     except Exception as e:
         # This catches invalid tokens, expired tokens, and verification failures.

@@ -109,14 +109,14 @@ export default function Upload() {
             
             {uploadedPhoto.caption && (
               <div className="mb-4">
-                <p className="text-sm font-medium" style={{ color: 'var(--text)' }}>AI-Generated Caption:</p>
+                <p className="text-sm font-medium" style={{ color: 'var(--text)' }}>Model Generated Caption:</p>
                 <p className="italic" style={{ color: 'var(--text)' }}>"{uploadedPhoto.caption}"</p>
               </div>
             )}
 
             {uploadedPhoto.tags && uploadedPhoto.tags.length > 0 && (
               <div>
-                <p className="text-sm font-medium mb-2" style={{ color: 'var(--text)' }}>AI-Generated Tags:</p>
+                <p className="text-sm font-medium mb-2" style={{ color: 'var(--text)' }}>Model Generated Tags:</p>
                 <div className="flex flex-wrap gap-2 justify-center">
                   {uploadedPhoto.tags.map((tag, idx) => (
                     <span
@@ -153,7 +153,7 @@ export default function Upload() {
     <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="mb-8">
         <h1 className="text-3xl font-bold" style={{ color: 'var(--text)' }}>Upload Photo</h1>
-        <p className="mt-2" style={{ color: 'var(--muted)' }}>Upload a photo and let AI automatically tag and caption it</p>
+        <p className="mt-2" style={{ color: 'var(--muted)' }}>Upload a photo and let Model automatically tag and caption it</p>
       </div>
 
       <form onSubmit={handleUpload} className="card">

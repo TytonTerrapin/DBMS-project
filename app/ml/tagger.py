@@ -10,8 +10,7 @@ from nltk.tokenize import word_tokenize
 from nltk.tag import pos_tag
 from typing import List, Tuple
 import os
-from sqlalchemy import insert, delete
-from app.db.models import init_db, Photo as DBPhoto, Tag as DBTag, photo_tags
+from app.db.models import Photo as DBPhoto, Tag as DBTag
 
 # Global model instances
 blip_model = None
@@ -145,42 +144,34 @@ async def process_image(photo_id: int, file_path: str):
         
         # Persist caption and tags to the database
         try:
-            engine, SessionLocal = init_db()
-            db = SessionLocal()
-            try:
-                photo = db.query(DBPhoto).filter(DBPhoto.id == photo_id).first()
+                # Get photo from database
+                photo = DBPhoto.get_by_id(photo_id)
                 if not photo:
                     print(f"Photo id={photo_id} not found in DB")
                 else:
                     # Update caption and mark tags_generated
-                    photo.caption = caption
-                    photo.tags_generated = 1
-                    db.add(photo)
-                    db.commit()
-
-                    # Clear existing tag associations for this photo
-                    db.execute(delete(photo_tags).where(photo_tags.c.photo_id == photo.id))
-
+                    DBPhoto.update(photo_id, caption=caption, tags_generated=1)
+                
+                    # Clear existing tag associations by deleting them
+                    # Get connection to delete photo_tags entries
+                    from app.db.models import get_connection, get_standard_cursor
+                    conn = get_connection()
+                    cursor = get_standard_cursor(conn)
+                    try:
+                        cursor.execute("DELETE FROM photo_tags WHERE photo_id = %s", (photo_id,))
+                        conn.commit()
+                    finally:
+                        cursor.close()
+                        conn.close()
+                
                     # Insert/associate tags and confidences
                     for tag_name, confidence in scored_tags:
                         # normalize tag
                         name = tag_name.strip().lower()
-                        tag = db.query(DBTag).filter(DBTag.name == name).first()
-                        if not tag:
-                            tag = DBTag(name=name)
-                            db.add(tag)
-                            db.commit()
-                            db.refresh(tag)
-
-                        # Insert association row with confidence
-                        db.execute(insert(photo_tags).values(
-                            photo_id=photo.id,
-                            tag_id=tag.id,
-                            confidence=float(confidence)
-                        ))
-                    db.commit()
-            finally:
-                db.close()
+                        tag = DBTag.get_or_create(name)
+                    
+                        # Add tag to photo with confidence
+                        DBTag.add_to_photo(photo_id, tag.id, float(confidence))
         except Exception as e:
             print(f"DB persist error for photo {photo_id}: {e}")
 

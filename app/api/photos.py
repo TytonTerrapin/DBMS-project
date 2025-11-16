@@ -5,9 +5,8 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, File, UploadFile, BackgroundTasks, HTTPException, Query, Form, Request
 from typing import List, Optional
 from pydantic import BaseModel
-from sqlalchemy.orm import Session, joinedload
-# --- UPDATED IMPORTS ---
-from ..db.models import get_db, Photo as DBPhoto, Tag, User # Import User
+# --- UPDATED IMPORTS for mysql.connector ---
+from ..db.models import get_db, Photo as DBPhoto, Tag, User, get_connection
 from ..db.operations import PhotoQueries, TagQueries, Analytics
 from ..ml.tagger import process_image
 from .dependencies import get_current_user, get_current_admin_user # Import dependencies
@@ -100,25 +99,21 @@ async def upload_photo(
     current_user: User = Depends(get_current_user),
     title: Optional[str] = Form(None),
     description: Optional[str] = Form(None),
-    db: Session = Depends(get_db)
 ):
     """Upload a photo and queue it for processing"""
     try:
         # Save file
         file_path = await save_upload_file(file)
 
-        # Create photo record
-        db_photo = DBPhoto(
+        # Create photo record using the new model
+        db_photo = DBPhoto.create(
             file_path=file_path,
             title=title or file.filename,
             description=description,
             owner_id=current_user.id,
-            uploaded_at=datetime.now(),
-            tags_generated=0
+            caption=None,
+            is_public=False
         )
-        db.add(db_photo)
-        db.commit()
-        db.refresh(db_photo)
 
         # Queue processing in background (will generate tags)
         actual_file_path = file_path.lstrip('/').replace('/', os.sep)
@@ -150,11 +145,10 @@ async def get_current_user_info(
 # --- NEW ENDPOINT: User's Dashboard ---
 @router.get("/users/me/photos")
 async def list_my_photos(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user)
 ):
     """List all photos uploaded by the current logged-in user"""
-    photos = db.query(DBPhoto).filter(DBPhoto.owner_id == current_user.id).all()
+    photos = DBPhoto.get_by_owner(current_user.id)
     return [photo.to_dict() for photo in photos]
 
 # --- PROTECTED: Admin's Dashboard ---
@@ -172,7 +166,6 @@ async def list_photos(
     search: Optional[str] = None,
     date_from: Optional[datetime] = None,
     date_to: Optional[datetime] = None,
-    db: Session = Depends(get_db)
 ):
     """
     List all photos in the system (ADMIN ONLY)
@@ -180,57 +173,49 @@ async def list_photos(
     # Admins can use the full set of queries
     if current_user.role == 'admin':
         if tags:
-            photos = PhotoQueries.get_photos_by_tags(db, tags)
+            photos = PhotoQueries.get_photos_by_tags(tags)
         elif date_from and date_to:
-            photos = PhotoQueries.get_photos_by_date_range(db, date_from, date_to)
+            photos = PhotoQueries.get_photos_by_date_range(date_from, date_to)
         elif min_confidence:
-            photos = PhotoQueries.get_photos_by_confidence(db, min_confidence)
+            photos = PhotoQueries.get_photos_by_confidence(min_confidence)
         elif search:
-            photos = DBPhoto.search(db, search)
+            photos = DBPhoto.search(search)
         else:
-            photos = DBPhoto.get_all(db, skip, limit, tag, sort_by, order)
+            photos = DBPhoto.get_all(skip, limit, tag, sort_by, order)
     else:
-        # Regular users only see their own photos; apply simple filters supported here
-        query = db.query(DBPhoto).filter(DBPhoto.owner_id == current_user.id)
-
-        if tags:
-            # Join tags and filter
-            query = query.join(DBPhoto.tags).filter(Tag.name.in_(tags))
-
-        if tag:
-            query = query.join(DBPhoto.tags).filter(Tag.name == tag)
-
+        # Regular users only see their own photos
+        photos = DBPhoto.get_by_owner(current_user.id)
+        
+        # Apply simple filters
         if search:
-            query = query.filter(
-                (DBPhoto.title.ilike(f"%{search}%")) |
-                (DBPhoto.description.ilike(f"%{search}%")) |
-                (DBPhoto.caption.ilike(f"%{search}%"))
-            )
-
-        # Sorting
-        if hasattr(DBPhoto, sort_by):
-            sort_col = getattr(DBPhoto, sort_by)
-            if order == 'desc':
-                sort_col = sort_col.desc()
-            query = query.order_by(sort_col)
-
-        photos = query.offset(skip).limit(limit).all()
+            photos = [p for p in photos if search.lower() in (p.title.lower() or '') or 
+                      search.lower() in (p.description.lower() or '') or
+                      search.lower() in (p.caption.lower() or '')]
+        
+        if tag:
+            photos = [p for p in photos if any(t['name'] == tag for t in p.tags)]
+        
+        if tags:
+            photos = [p for p in photos if any(t['name'] in tags for t in p.tags)]
+        
+        # Apply sorting
+        reverse = order == 'desc'
+        if sort_by == 'uploaded_at':
+            photos = sorted(photos, key=lambda p: p.uploaded_at, reverse=reverse)
+        elif sort_by == 'title':
+            photos = sorted(photos, key=lambda p: p.title, reverse=reverse)
+        
+        # Apply pagination
+        photos = photos[skip:skip+limit]
 
     return [photo.to_dict() for photo in photos]
 
 
 @router.get("/photos/explore")
 async def explore_photos(
-    request: Request,
-    db: Session = Depends(get_db)
+    request: Request
 ):
-    """Public read-only gallery of opt-in public photos. Returns anonymized owner info.
-
-    This handler is public (no auth required). It defensively parses query
-    parameters so empty numeric values (e.g. `skip=`) do not cause FastAPI to
-    return 422. It eager-loads tags to avoid N+1 queries and enforces a
-    reasonable `MAX_LIMIT`.
-    """
+    """Public read-only gallery of opt-in public photos. Returns anonymized owner info."""
     # Defensive parse of query params
     q = request.query_params.get("q")
     tag = request.query_params.get("tag")
@@ -251,19 +236,20 @@ async def explore_photos(
         limit = 1
     limit = min(limit, MAX_LIMIT)
 
-    # Build query only for public photos (uploader opt-in)
-    query = db.query(DBPhoto).filter(DBPhoto.is_public == True)
-
+    # Get all public photos
+    photos = DBPhoto.get_all(skip, limit, tag)
+    
+    # Filter for only public photos
+    photos = [p for p in photos if p.is_public]
+    
     if q:
-        query = query.filter(DBPhoto.title.ilike(f"%{q}%"))
-
+        photos = [p for p in photos if q.lower() in (p.title.lower() or '')]
+    
     if tag:
-        query = query.join(DBPhoto.tags).filter(Tag.name == tag)
-
-    query = query.options(joinedload(DBPhoto.tags))
-    query = query.order_by(DBPhoto.uploaded_at.desc())
-
-    photos = query.offset(skip).limit(limit).all()
+        photos = [p for p in photos if any(t['name'] == tag for t in p.tags)]
+    
+    # Re-apply pagination after filtering
+    photos = photos[skip:skip+limit]
 
     return [p.to_dict(include_tags=True, anonymize_owner=True) for p in photos]
 
@@ -272,22 +258,20 @@ async def explore_photos(
 async def get_recent_photos(
     days: int = 7,
     limit: int = 20,
-    admin_user: User = Depends(get_current_admin_user),
-    db: Session = Depends(get_db)
+    admin_user: User = Depends(get_current_admin_user)
 ):
     """Get recently uploaded photos (ADMIN ONLY)"""
-    photos = PhotoQueries.get_recent_photos(db, days, limit)
+    photos = PhotoQueries.get_recent_photos(days, limit)
     return [photo.to_dict() for photo in photos]
 
 # --- PROTECTED: Admin-Only Action ---
 @router.get("/photos/{photo_id}")
 async def get_photo(
     photo_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user)
 ):
     """Get detailed photo information by ID. Admins can view any photo; users can view their own."""
-    photo = DBPhoto.get_by_id(db, photo_id)
+    photo = DBPhoto.get_by_id(photo_id)
     if not photo:
         raise HTTPException(status_code=404, detail="Photo not found")
 
@@ -304,10 +288,9 @@ async def update_photo(
     current_user: User = Depends(get_current_user),
     title: Optional[str] = None,
     description: Optional[str] = None,
-    db: Session = Depends(get_db)
 ):
     """Update photo metadata. Admins can update any photo; users may update their own."""
-    photo = DBPhoto.get_by_id(db, photo_id)
+    photo = DBPhoto.get_by_id(photo_id)
     if not photo:
         raise HTTPException(status_code=404, detail="Photo not found")
 
@@ -320,25 +303,24 @@ async def update_photo(
     if description:
         updates['description'] = description
 
-    updated_photo = photo.update(db, **updates)
+    updated_photo = DBPhoto.update(photo_id, **updates)
     return updated_photo.to_dict()
 
 # --- PROTECTED: Admin-Only Action ---
 @router.delete("/photos/{photo_id}")
 async def delete_photo(
     photo_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user)
 ):
     """Delete a photo and its file. Admins can delete any photo; users may delete their own."""
-    photo = DBPhoto.get_by_id(db, photo_id)
+    photo = DBPhoto.get_by_id(photo_id)
     if not photo:
         raise HTTPException(status_code=404, detail="Photo not found")
 
     if current_user.role != 'admin' and photo.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized to delete this photo")
 
-    photo.delete(db)
+    DBPhoto.delete(photo_id)
     return {"status": "success", "message": "Photo deleted"}
 
 # --- PROTECTED: Admin-Only Action ---
@@ -346,11 +328,10 @@ async def delete_photo(
 async def reprocess_photo(
     photo_id: int, 
     background_tasks: BackgroundTasks, 
-    admin_user: User = Depends(get_current_admin_user),
-    db: Session = Depends(get_db)
+    admin_user: User = Depends(get_current_admin_user)
 ):
     """Trigger reprocessing (tagging) for a specific photo (ADMIN ONLY)"""
-    photo = DBPhoto.get_by_id(db, photo_id)
+    photo = DBPhoto.get_by_id(photo_id)
     if not photo:
         raise HTTPException(status_code=404, detail="Photo not found")
 
@@ -362,11 +343,10 @@ async def reprocess_photo(
 async def list_tags(
     skip: int = 0,
     limit: int = 100,
-    admin_user: User = Depends(get_current_admin_user),
-    db: Session = Depends(get_db)
+    admin_user: User = Depends(get_current_admin_user)
 ):
     """List all tags with usage statistics (ADMIN ONLY)"""
-    tags_stats = TagQueries.get_tag_stats(db)
+    tags_stats = TagQueries.get_tag_stats()
     return [
         {
             "id": tag.id,
@@ -382,11 +362,10 @@ async def list_tags(
 async def get_related_tags(
     tag_name: str,
     min_correlation: int = 2,
-    admin_user: User = Depends(get_current_admin_user),
-    db: Session = Depends(get_db)
+    admin_user: User = Depends(get_current_admin_user)
 ):
     """Get tags that frequently appear together (ADMIN ONLY)"""
-    related = TagQueries.get_related_tags(db, tag_name, min_correlation)
+    related = TagQueries.get_related_tags(tag_name, min_correlation)
     return [
         {
             "tag": tag.name,
@@ -398,13 +377,11 @@ async def get_related_tags(
 # --- PROTECTED: Admin-Only Action ---
 @router.get("/analytics/summary")
 async def get_analytics_summary(
-    admin_user: User = Depends(get_current_admin_user),
-    db: Session = Depends(get_db)
+    admin_user: User = Depends(get_current_admin_user)
 ):
     """Get overall analytics summary (ADMIN ONLY)"""
-    upload_stats = Analytics.get_upload_statistics(db)
-    confidence_dist = Analytics.get_tag_confidence_distribution(db)
-    popular_tags = Tag.get_popular(db)
+    upload_stats = Analytics.get_upload_statistics()
+    confidence_dist = Analytics.get_tag_confidence_distribution()
     
     return {
         "upload_stats": [
@@ -414,9 +391,5 @@ async def get_analytics_summary(
         "confidence_distribution": [
             {"confidence": float(conf), "count": count}
             for conf, count in confidence_dist
-        ],
-        "popular_tags": [
-            {"name": tag.name, "count": count}
-            for tag, count in popular_tags
         ]
     }

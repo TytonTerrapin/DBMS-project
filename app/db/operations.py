@@ -1,30 +1,44 @@
 """
-Database operations and queries module
+Database operations and queries module using mysql.connector
 """
 from typing import List, Optional, Tuple
-from sqlalchemy import func, and_, or_
-from sqlalchemy.orm import Session
-from .models import Photo, Tag, photo_tags
+from .models import Photo, Tag, get_connection, dict_from_cursor, row_from_cursor, get_dict_cursor, get_standard_cursor
 from datetime import datetime, timedelta
 
 class PhotoQueries:
     @staticmethod
     def get_photos_by_date_range(
-        db: Session,
         start_date: datetime,
         end_date: datetime
     ) -> List[Photo]:
         """Get photos within a date range"""
-        return db.query(Photo).filter(
-            and_(
-                Photo.uploaded_at >= start_date,
-                Photo.uploaded_at <= end_date
+        conn = get_connection()
+        cursor = get_dict_cursor(conn)
+        try:
+            cursor.execute(
+                """SELECT id, file_path, title, description, owner_id, uploaded_at, tags_generated, caption, is_public
+                   FROM photos WHERE uploaded_at >= %s AND uploaded_at <= %s ORDER BY uploaded_at DESC""",
+                (start_date, end_date)
             )
-        ).all()
+            rows = cursor.fetchall()
+            photos = []
+            for row in rows:
+                photo = Photo(**row)
+                cursor.execute(
+                    """SELECT t.name, pt.confidence FROM tags t
+                       JOIN photo_tags pt ON t.id = pt.tag_id
+                       WHERE pt.photo_id = %s""",
+                    (photo.id,)
+                )
+                photo.tags = [dict(tag_row) for tag_row in cursor.fetchall()]
+                photos.append(photo)
+            return photos
+        finally:
+            cursor.close()
+            conn.close()
 
     @staticmethod
     def get_photos_by_tags(
-        db: Session,
         tags: List[str],
         match_all: bool = False
     ) -> List[Photo]:
@@ -32,146 +46,267 @@ class PhotoQueries:
         Get photos by tags
         match_all: If True, photo must have all tags. If False, any tag matches
         """
-        query = db.query(Photo).join(Photo.tags)
-        if match_all:
-            # Must match all tags
-            for tag in tags:
-                query = query.filter(Tag.name == tag)
-        else:
-            # Match any tag
-            query = query.filter(Tag.name.in_(tags))
-        return query.distinct().all()
+        conn = get_connection()
+        cursor = get_dict_cursor(conn)
+        try:
+            if match_all:
+                # Must match all tags - use GROUP BY and HAVING
+                placeholders = ','.join(['%s'] * len(tags))
+                query = f"""SELECT DISTINCT p.id, p.file_path, p.title, p.description, p.owner_id, 
+                           p.uploaded_at, p.tags_generated, p.caption, p.is_public
+                           FROM photos p
+                           JOIN photo_tags pt ON p.id = pt.photo_id
+                           JOIN tags t ON pt.tag_id = t.id
+                           WHERE t.name IN ({placeholders})
+                           GROUP BY p.id
+                           HAVING COUNT(DISTINCT t.id) = %s"""
+                params = tags + [len(tags)]
+            else:
+                # Match any tag
+                placeholders = ','.join(['%s'] * len(tags))
+                query = f"""SELECT DISTINCT p.id, p.file_path, p.title, p.description, p.owner_id, 
+                           p.uploaded_at, p.tags_generated, p.caption, p.is_public
+                           FROM photos p
+                           JOIN photo_tags pt ON p.id = pt.photo_id
+                           JOIN tags t ON pt.tag_id = t.id
+                           WHERE t.name IN ({placeholders})"""
+                params = tags
+            
+            cursor.execute(query, params)
+            rows = cursor.fetchall()
+            photos = []
+            for row in rows:
+                photo = Photo(**row)
+                cursor.execute(
+                    """SELECT t.name, pt.confidence FROM tags t
+                       JOIN photo_tags pt ON t.id = pt.tag_id
+                       WHERE pt.photo_id = %s""",
+                    (photo.id,)
+                )
+                photo.tags = [dict(tag_row) for tag_row in cursor.fetchall()]
+                photos.append(photo)
+            return photos
+        finally:
+            cursor.close()
+            conn.close()
 
     @staticmethod
     def get_photos_by_confidence(
-        db: Session,
         min_confidence: float = 0.5
     ) -> List[Tuple[Photo, str, float]]:
         """Get photos with tags above confidence threshold"""
-        return db.query(
-            Photo, Tag.name, photo_tags.c.confidence
-        ).join(
-            photo_tags
-        ).join(
-            Tag
-        ).filter(
-            photo_tags.c.confidence >= min_confidence
-        ).all()
+        conn = get_connection()
+        cursor = get_dict_cursor(conn)
+        try:
+            cursor.execute(
+                """SELECT p.id, p.file_path, p.title, p.description, p.owner_id, p.uploaded_at,
+                   p.tags_generated, p.caption, p.is_public, t.name, pt.confidence
+                   FROM photos p
+                   JOIN photo_tags pt ON p.id = pt.photo_id
+                   JOIN tags t ON pt.tag_id = t.id
+                   WHERE pt.confidence >= %s
+                   ORDER BY p.uploaded_at DESC""",
+                (min_confidence,)
+            )
+            rows = cursor.fetchall()
+            results = []
+            for row in rows:
+                photo = Photo(
+                    row['id'], row['file_path'], row['title'], row['description'],
+                    row['owner_id'], row['uploaded_at'], row['tags_generated'],
+                    row['caption'], row['is_public']
+                )
+                results.append((photo, row['name'], row['confidence']))
+            return results
+        finally:
+            cursor.close()
+            conn.close()
 
     @staticmethod
-    def get_untagged_photos(db: Session) -> List[Photo]:
+    def get_untagged_photos() -> List[Photo]:
         """Get photos that haven't been processed by ML yet"""
-        return db.query(Photo).filter(Photo.tags_generated == 0).all()
+        conn = get_connection()
+        cursor = get_dict_cursor(conn)
+        try:
+            cursor.execute(
+                """SELECT id, file_path, title, description, owner_id, uploaded_at, tags_generated, caption, is_public
+                   FROM photos WHERE tags_generated = 0"""
+            )
+            rows = cursor.fetchall()
+            return [Photo(**row) for row in rows]
+        finally:
+            cursor.close()
+            conn.close()
 
     @staticmethod
     def get_recent_photos(
-        db: Session,
         days: int = 7,
         limit: int = 20
     ) -> List[Photo]:
         """Get recently uploaded photos"""
         cutoff = datetime.now() - timedelta(days=days)
-        return db.query(Photo).filter(
-            Photo.uploaded_at >= cutoff
-        ).order_by(
-            Photo.uploaded_at.desc()
-        ).limit(limit).all()
+        conn = get_connection()
+        cursor = get_dict_cursor(conn)
+        try:
+            cursor.execute(
+                """SELECT id, file_path, title, description, owner_id, uploaded_at, tags_generated, caption, is_public
+                   FROM photos WHERE uploaded_at >= %s ORDER BY uploaded_at DESC LIMIT %s""",
+                (cutoff, limit)
+            )
+            rows = cursor.fetchall()
+            photos = []
+            for row in rows:
+                photo = Photo(**row)
+                cursor.execute(
+                    """SELECT t.name, pt.confidence FROM tags t
+                       JOIN photo_tags pt ON t.id = pt.tag_id
+                       WHERE pt.photo_id = %s""",
+                    (photo.id,)
+                )
+                photo.tags = [dict(tag_row) for tag_row in cursor.fetchall()]
+                photos.append(photo)
+            return photos
+        finally:
+            cursor.close()
+            conn.close()
 
 class TagQueries:
     @staticmethod
-    def get_tag_stats(db: Session) -> List[Tuple[Tag, int, float]]:
+    def get_tag_stats() -> List[Tuple]:
         """Get tags with usage count and average confidence"""
-        return db.query(
-            Tag,
-            func.count(photo_tags.c.photo_id).label('usage_count'),
-            func.avg(photo_tags.c.confidence).label('avg_confidence')
-        ).join(
-            photo_tags
-        ).group_by(
-            Tag.id
-        ).order_by(
-            func.count(photo_tags.c.photo_id).desc()
-        ).all()
+        conn = get_connection()
+        cursor = get_dict_cursor(conn)
+        try:
+            cursor.execute(
+                """SELECT t.id, t.name, COUNT(pt.photo_id) as usage_count, AVG(pt.confidence) as avg_confidence
+                   FROM tags t
+                   LEFT JOIN photo_tags pt ON t.id = pt.tag_id
+                   GROUP BY t.id, t.name
+                   ORDER BY usage_count DESC"""
+            )
+            rows = cursor.fetchall()
+            results = []
+            for row in rows:
+                tag = Tag(row['id'], row['name'])
+                results.append((tag, row['usage_count'], row['avg_confidence']))
+            return results
+        finally:
+            cursor.close()
+            conn.close()
 
     @staticmethod
     def get_related_tags(
-        db: Session,
         tag_name: str,
         min_correlation: int = 2
-    ) -> List[Tuple[Tag, int]]:
+    ) -> List[Tuple]:
         """Find tags that frequently appear together"""
-        tag = db.query(Tag).filter(Tag.name == tag_name).first()
-        if not tag:
-            return []
-
-        # Find photos with this tag
-        photo_ids = db.query(photo_tags.c.photo_id).filter(
-            photo_tags.c.tag_id == tag.id
-        ).subquery()
-
-        # Find other tags on these photos
-        return db.query(
-            Tag,
-            func.count(photo_tags.c.photo_id).label('correlation')
-        ).join(
-            photo_tags
-        ).filter(
-            and_(
-                photo_tags.c.photo_id.in_(photo_ids),
-                Tag.id != tag.id
+        conn = get_connection()
+        cursor = get_dict_cursor(conn)
+        try:
+            # Get the tag ID
+            cursor.execute("SELECT id FROM tags WHERE name = %s", (tag_name,))
+            row = cursor.fetchone()
+            if not row:
+                return []
+            
+            tag_id = row['id']
+            
+            # Find photos with this tag
+            cursor.execute(
+                """SELECT photo_id FROM photo_tags WHERE tag_id = %s""",
+                (tag_id,)
             )
-        ).group_by(
-            Tag.id
-        ).having(
-            func.count(photo_tags.c.photo_id) >= min_correlation
-        ).order_by(
-            func.count(photo_tags.c.photo_id).desc()
-        ).all()
+            photo_ids = [r['photo_id'] for r in cursor.fetchall()]
+            
+            if not photo_ids:
+                return []
+            
+            # Find other tags on these photos
+            placeholders = ','.join(['%s'] * len(photo_ids))
+            query = f"""SELECT t.id, t.name, COUNT(pt.photo_id) as correlation
+                       FROM tags t
+                       JOIN photo_tags pt ON t.id = pt.tag_id
+                       WHERE pt.photo_id IN ({placeholders}) AND t.id != %s
+                       GROUP BY t.id, t.name
+                       HAVING COUNT(pt.photo_id) >= %s
+                       ORDER BY correlation DESC"""
+            
+            params = photo_ids + [tag_id, min_correlation]
+            cursor.execute(query, params)
+            rows = cursor.fetchall()
+            
+            results = []
+            for row in rows:
+                tag = Tag(row['id'], row['name'])
+                results.append((tag, row['correlation']))
+            return results
+        finally:
+            cursor.close()
+            conn.close()
 
     @staticmethod
-    def cleanup_unused_tags(db: Session) -> int:
+    def cleanup_unused_tags() -> int:
         """Remove tags that aren't associated with any photos"""
-        unused = db.query(Tag).outerjoin(photo_tags).filter(
-            photo_tags.c.photo_id == None
-        ).all()
-        
-        count = len(unused)
-        for tag in unused:
-            db.delete(tag)
-        db.commit()
-        
-        return count
+        conn = get_connection()
+        cursor = get_dict_cursor(conn)
+        try:
+            # Find unused tags
+            cursor.execute(
+                """SELECT t.id FROM tags t
+                   LEFT JOIN photo_tags pt ON t.id = pt.tag_id
+                   WHERE pt.photo_id IS NULL"""
+            )
+            unused_ids = [r['id'] for r in cursor.fetchall()]
+            
+            if unused_ids:
+                placeholders = ','.join(['%s'] * len(unused_ids))
+                cursor = get_standard_cursor(conn)
+                cursor.execute(f"DELETE FROM tags WHERE id IN ({placeholders})", unused_ids)
+                conn.commit()
+            
+            return len(unused_ids)
+        finally:
+            cursor.close()
+            conn.close()
 
 class Analytics:
     @staticmethod
     def get_upload_statistics(
-        db: Session,
         days: int = 30
-    ) -> List[Tuple[datetime, int]]:
+    ) -> List[Tuple]:
         """Get daily upload counts for the last N days"""
         cutoff = datetime.now() - timedelta(days=days)
-        return db.query(
-            func.date(Photo.uploaded_at).label('date'),
-            func.count(Photo.id).label('count')
-        ).filter(
-            Photo.uploaded_at >= cutoff
-        ).group_by(
-            func.date(Photo.uploaded_at)
-        ).order_by(
-            func.date(Photo.uploaded_at)
-        ).all()
+        conn = get_connection()
+        cursor = get_dict_cursor(conn)
+        try:
+            cursor.execute(
+                """SELECT DATE(uploaded_at) as date, COUNT(id) as count
+                   FROM photos
+                   WHERE uploaded_at >= %s
+                   GROUP BY DATE(uploaded_at)
+                   ORDER BY DATE(uploaded_at)""",
+                (cutoff,)
+            )
+            rows = cursor.fetchall()
+            return [(row['date'], row['count']) for row in rows]
+        finally:
+            cursor.close()
+            conn.close()
 
     @staticmethod
-    def get_tag_confidence_distribution(
-        db: Session
-    ) -> List[Tuple[float, int]]:
+    def get_tag_confidence_distribution() -> List[Tuple]:
         """Get distribution of tag confidence scores"""
-        # Round confidence to 1 decimal place for grouping
-        return db.query(
-            func.round(photo_tags.c.confidence, 1).label('confidence'),
-            func.count().label('count')
-        ).group_by(
-            func.round(photo_tags.c.confidence, 1)
-        ).order_by(
-            func.round(photo_tags.c.confidence, 1)
-        ).all()
+        conn = get_connection()
+        cursor = get_dict_cursor(conn)
+        try:
+            cursor.execute(
+                """SELECT ROUND(confidence, 1) as confidence, COUNT(*) as count
+                   FROM photo_tags
+                   GROUP BY ROUND(confidence, 1)
+                   ORDER BY ROUND(confidence, 1)"""
+            )
+            rows = cursor.fetchall()
+            return [(row['confidence'], row['count']) for row in rows]
+        finally:
+            cursor.close()
+            conn.close()
