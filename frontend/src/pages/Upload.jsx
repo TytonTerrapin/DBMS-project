@@ -48,6 +48,11 @@ export default function Upload() {
       return
     }
 
+    if (!title) {
+      setError('Please enter a title')
+      return
+    }
+
     try {
       setUploading(true)
       setError(null)
@@ -198,7 +203,7 @@ export default function Upload() {
         {/* Optional fields */}
         <div className="mb-6">
           <label htmlFor="title" className="block text-sm font-medium mb-2" style={{ color: 'var(--text)' }}>
-            Title (Optional)
+            Event Name (Required)
           </label>
           <input
             type="text"
@@ -206,8 +211,9 @@ export default function Upload() {
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             className="input-field"
-            placeholder="Give your photo a title"
+            placeholder="Enter event name"
             disabled={uploading}
+            required
           />
         </div>
 
@@ -232,7 +238,7 @@ export default function Upload() {
         <div className="flex gap-4">
           <button
             type="submit"
-            disabled={!selectedFile || uploading}
+            disabled={!selectedFile || uploading || !title}
             className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             {uploading ? (
