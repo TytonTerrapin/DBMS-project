@@ -55,12 +55,6 @@ You only need to adjust them if your MySQL or Clerk configuration is different.
    - Username: `root`
    - Password: *(empty)*
 
-   The default connection string in `.env` is:
-
-   ```ini
-   DATABASE_URL=mysql+pymysql://root:@localhost/campus_lens
-   ```
-
 ---
 
 ## 3. Installing Dependencies
@@ -104,6 +98,7 @@ It will:
   ```
 - Backend: http://127.0.0.1:8000  
 - Frontend: http://localhost:5173
+- Both the frontend and backend will get launched in two different terminals.
 
 ---
 
