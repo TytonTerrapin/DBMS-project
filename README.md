@@ -1,136 +1,165 @@
 
 # CampusLens
 
-A media management platform for campus photo collections. Combines a FastAPI backend with React + Vite frontend and deep learning models (BLIP/CLIP) for automated captions and tag validation.
+CampusLens is a media management platform built to organize and explore campus photo collections.  
+It features a FastAPI backend and a React + Vite frontend, combined with AI models (BLIP/CLIP) for auto-tagging and captioning.
+
+---
 
 ## Features
 
 - User authentication via Clerk
 - Photo upload with deep learning-powered tagging and captioning
 - Gallery with filtering and sorting by tags
-- Dashboard with statistics
-- Responsive design with Tailwind CSS
-- Protected routes and JWT token authorization
+- Dashboard with per-user and system-wide statistics
+- Responsive UI with Tailwind CSS
+- Protected routes with JWT (Clerk → FastAPI)
 
-## Quick Start
+---
 
-### Prerequisites
+## 1. Prerequisites
+
+Before running CampusLens, install:
+
 - Python 3.9+
 - Node.js 16+
-- MySQL database (e.g., via XAMPP)
-- Clerk account (https://dashboard.clerk.com)
-- All dependencies installed (run `pip install -r requirements.txt` and `cd frontend && npm install`)
-- Environment files created (see "Environment Variables" section below)
+- XAMPP (or any MySQL server)
+- Git
 
-### Option 1: Automated Start (Windows)
-From the project root directory, simply run the batch file:
+Clone the repository:
+
 ```bash
-./start.bat
+git clone https://github.com/TytonTerrapin/DBMS-project.git
+cd DBMS-project
 ```
-This will open two new terminals and start both the backend and frontend servers.
 
-### Option 2: Manual Start (All Platforms)
+Both backend and frontend environment files (.env and frontend/.env.local) are already present in the repo with working defaults for development.  
+You only need to adjust them if your MySQL or Clerk configuration is different.
 
-#### Terminal 1 (Backend):
+---
+
+## 2. Database Setup (XAMPP / MySQL)
+
+1. Open the XAMPP Control Panel.
+2. Start Apache and MySQL.
+3. Go to phpMyAdmin: http://localhost/phpmyadmin
+4. Create a database named:
+
+   ```
+   campus_lens
+   ```
+
+5. Ensure your MySQL credentials match what’s in DATABASE_URL from `.env`.  
+   Default XAMPP credentials:
+
+   - Username: `root`
+   - Password: *(empty)*
+
+   The default connection string in `.env` is:
+
+   ```ini
+   DATABASE_URL=mysql+pymysql://root:@localhost/campus_lens
+   ```
+
+---
+
+## 3. Installing Dependencies
+
+### Backend (FastAPI)
+
 ```bash
-# Run the server from the project root
-python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+python -m venv venv
+venv\Scripts\activate.bat
+pip install -r requirements.txt
 ```
-Backend available at: <http://localhost:8000>
 
-#### Terminal 2 (Frontend):
+### Frontend (React + Vite)
+
 ```bash
-# Navigate to frontend
 cd frontend
-
-# Start dev server
-npm run dev
+npm install
+cd ..
 ```
-Frontend available at: <http://localhost:5173>
 
-## Environment Variables
+---
 
-You must create two environment files for the project to run.
+## 4. Running the App
 
-### 1. Backend (`.env`)
-Create a file named `.env` in the project root directory.
+### Recommended: start.bat (Windows Only)
+
+```bash
+start.bat
+```
+
+It will:
+
+- Activate virtualenv if present (`./venv`)
+- Launch backend:
+  ```bash
+  python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+  ```
+- Launch frontend:
+  ```bash
+  npm run dev
+  ```
+- Backend: http://127.0.0.1:8000  
+- Frontend: http://localhost:5173
+
+---
+
+## 5. Sample Photos
+
+A folder named `sample_photos` is included in the project. You can upload these photos through the app's interface after logging in. They are intended to help you try out:
+
+- Automatic caption and tag generation
+- Photo updating
+- Deleting and filtering functionality
+
+---
+
+## 6. API Endpoints Overview
+
+### User
+
+- GET /api/users/me: Get logged-in user details
+- GET /api/users/me/photos: Get user’s photos
+
+### Photos
+
+- POST /api/photos/upload: Upload image with caption/tag generation
+- GET /api/photos/explore: Public gallery
+- GET /api/photos/{id}: Get a specific photo
+- PUT /api/photos/{id}: Edit a photo
+- DELETE /api/photos/{id}: Delete a photo
+
+### Admin
+
+- GET /api/photos: Get all photos
+- GET /api/tags: Get tag stats
+- GET /api/analytics/summary: System analytics
+
+---
+
+## 7. Development Notes
+
+Disable ML models during development:
 
 ```ini
-# Get from https://dashboard.clerk.com API Keys -> Advanced
-CLERK_JWKS_URL=https://your-clerk-instance.clerk.accounts.dev/.well-known/jwks.json
-CLERK_ISSUER=https://your-clerk-instance.clerk.accounts.dev
-
-# Connection string for your MySQL database (e.g., from XAMPP)
-DATABASE_URL=mysql+pymysql://root:@localhost/campus_lens
-
-# Set to "false" to skip loading heavy ML models for faster dev startup
-LOAD_ML_MODELS=true
+LOAD_ML_MODELS=false
 ```
 
-### 2. Frontend (`frontend/.env.local`)
-Create a file named `.env.local` inside the `frontend/` directory.
+Images are saved in an `uploads/` folder created automatically.
 
-```ini
-# Get from https://dashboard.clerk.com API Keys
-VITE_CLERK_PUBLISHABLE_KEY=pk_test_your_key_here
+---
 
-# Backend API URL
-VITE_API_URL=http://localhost:8000
-```
+## 8. Contributors
 
-## Project Structure
+- Arnav Bansal (@TytonTerrapin)
+- Nakul Tanwar (@Nakul-28)
+- Ayush (@Ayush-CS-89112521)
 
-```
-app/                   # Backend (FastAPI)
-├── api/              # Route endpoints
-├── db/               # Database models and operations
-└── ml/               # ML components (BLIP/CLIP)
+---
 
-frontend/             # Frontend (React + Vite)
-├── src/
-│   ├── components/   # Reusable UI components
-│   ├── pages/        # Route pages
-│   ├── services/     # API client
-│   └── styles/       # Tailwind CSS
-└── public/           # Static assets
+## 9. License
 
-uploads/              # Photo storage directory
-```
-
-## API Endpoints
-
-All endpoints are prefixed with `/api`. Protected routes require a valid Clerk JWT.
-
-### User Endpoints
-
-- `GET /users/me`: (Protected) Get the current logged-in user's details.
-- `GET /users/me/photos`: (Protected) Get all photos uploaded by the current user.
-
-### Photo Endpoints
-
-- `POST /photos/upload`: (Protected) Upload a new photo.
-- `GET /photos/explore`: (Public) Get all photos marked as `is_public`.
-- `GET /photos/{photo_id}`: (Protected) Get a single photo. Users can only get their own; admins can get any.
-- `PUT /photos/{photo_id}`: (Protected) Update a photo's title/description.
-- `DELETE /photos/{photo_id}`: (Protected) Delete a photo.
-
-### Admin Endpoints
-
-- `GET /photos`: (Admin) Get all photos in the system, with advanced filtering.
-- `GET /tags`: (Admin) Get a list of all tags with usage statistics.
-- `GET /analytics/summary`: (Admin) Get system-wide analytics.
-
-## Development Notes
-
-- ML models (BLIP/CLIP) are resource-heavy. Disable with `LOAD_ML_MODELS=false` in development.
-- The `uploads/` directory is created automatically at startup.
-- Protected routes require a valid Clerk JWT token.
-- See `frontend/IMPLEMENTATION_SUMMARY.md` for frontend architecture details.
-
-## Contributors
-- Arnav Bansal (TytonTerrapin)
-- Nakul Tanwar (Nakul-28)
-- Ayush (Ayush-CS-89112521)
-## License
-
-MIT
+MIT License
