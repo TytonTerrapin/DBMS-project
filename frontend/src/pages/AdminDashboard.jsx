@@ -5,7 +5,7 @@ import { photoAPI } from '../services/api'
 import LoadingSpinner from '../components/LoadingSpinner'
 import PhotoModal from '../components/PhotoModal'
 
-export default function Dashboard() {
+export default function AdminDashboard() {
   const { getToken } = useAuth()
   const { user } = useUser()
   const [photos, setPhotos] = useState([])

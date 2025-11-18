@@ -322,6 +322,14 @@ export default function Gallery() {
             photo={selectedPhoto}
             onClose={() => setSelectedPhoto(null)}
             onDelete={handleDeletePhoto}
+            onNavigate={(direction) => {
+              const currentIndex = filteredPhotos.findIndex(p => p.id === selectedPhoto.id)
+              if (direction === 'prev' && currentIndex > 0) {
+                setSelectedPhoto(filteredPhotos[currentIndex - 1])
+              } else if (direction === 'next' && currentIndex < filteredPhotos.length - 1) {
+                setSelectedPhoto(filteredPhotos[currentIndex + 1])
+              }
+            }}
           />
         )}
       </main>

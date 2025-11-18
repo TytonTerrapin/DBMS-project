@@ -131,7 +131,19 @@ export default function Explore() {
       )}
 
       {selectedPhoto && (
-        <PhotoModal photo={selectedPhoto} onClose={() => setSelectedPhoto(null)} readOnly={true} />
+        <PhotoModal 
+          photo={selectedPhoto} 
+          onClose={() => setSelectedPhoto(null)} 
+          readOnly={true}
+          onNavigate={(direction) => {
+            const currentIndex = filteredPhotos.findIndex(p => p.id === selectedPhoto.id)
+            if (direction === 'prev' && currentIndex > 0) {
+              setSelectedPhoto(filteredPhotos[currentIndex - 1])
+            } else if (direction === 'next' && currentIndex < filteredPhotos.length - 1) {
+              setSelectedPhoto(filteredPhotos[currentIndex + 1])
+            }
+          }}
+        />
       )}
     </div>
   )

@@ -157,6 +157,57 @@
     box-shadow: 0 1px 0 rgba(0,0,0,0.25) inset;
   }
 
+  /* Enhanced tag pills with smooth hover effects */
+  .tag-pill-enhanced {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.875rem;
+    border-radius: 9999px;
+    background: rgba(14, 165, 164, 0.1);
+    border: 1px solid rgba(14, 165, 164, 0.2);
+    font-size: 0.875rem;
+    line-height: 1;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    cursor: default;
+  }
+
+  .tag-pill-enhanced:hover {
+    background: rgba(14, 165, 164, 0.2);
+    border-color: rgba(14, 165, 164, 0.4);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(14, 165, 164, 0.2);
+  }
+
+  .tag-pill-enhanced p {
+    margin: 0;
+    color: var(--text);
+  }
+
+  /* Modal action buttons */
+  .btn-modal-action {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius);
+    font-weight: 600;
+    font-size: 0.875rem;
+    transition: all 0.2s ease;
+    cursor: pointer;
+  }
+
+  .btn-modal-action:hover {
+    transform: translateY(-1px);
+    filter: brightness(1.1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  }
+
+  .btn-modal-action:active {
+    transform: translateY(0);
+  }
+
   .tag-pill .h-2 { /* confidence dot */
     width: 0.5rem; height: 0.5rem;
     flex: none;
